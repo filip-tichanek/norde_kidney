@@ -1,0 +1,2785 @@
+---
+title: "SURVIVAL IN KIDNEY AND BLADDER CANCERS IN THE NORDIC COUNTRIES THROUGH A HALF CENTURY"
+subtitle: "Full R code"
+format: 
+  html:
+    code-fold: true
+    code-summary: "Show the code"
+    embed-resources: true
+    keep-md: true
+    toc: true
+    toc-depth: 4
+    toc-location: left
+    number-sections: true
+    number-depth: 4
+editor: visual
+project:
+  type: default
+  output-dir: output
+theme: darkly
+fontsize: 13px
+---
+
+To see the code, click on the ***Show the code***
+
+# Package upload
+
+```{r}
+rm(list = ls())
+suppressWarnings(suppressMessages( {
+  library(brms)
+  library(stringr)
+  library(dplyr)
+  library(ggplot2)
+  library(sessioninfo)
+  } ) )
+```
+
+# Incidence and mortality
+
+## Data upload and wrangling
+
+```{r}
+# setting parameters for smoothing
+spar = 0.4
+knot = 12
+
+# colors ---------------------------------------------------------
+
+cola <- c(
+  rgb(1, 0.1, 0.1, alpha = 1),
+  rgb(0.1, 0.1, 1, alpha = 1),
+  rgb(0, 0.6, 0.3, alpha = 1),
+  rgb(0.7, 0.7, 0.1, alpha = 1))
+
+colb<-c(
+  rgb(1, 0.1, 0.1, alpha = 0.2),
+  rgb(0.1, 0.1, 1, alpha = 0.2),
+  rgb(0, 0.6, 0.3, alpha = 0.2),
+  rgb(0.7, 0.7, 0.1, alpha = 0.2))
+
+colc<-c(
+  rgb(1, 0.1, 0.1, alpha = 0.8),
+  rgb(0.1, 0.1, 1, alpha = 0.8),
+  rgb(0, 0.6, 0.3, alpha = 0.8),
+  rgb(0.7, 0.7, 0.1, alpha = 0.8))
+
+
+# kidney data
+urlfile="https://raw.githubusercontent.com/filip-tichanek/nord_kidney/main/source/kidney_inc_mor.csv"
+kidney_inc_mor <- read.csv(url(urlfile),sep=",")
+colnam<-kidney_inc_mor[,1]
+kidney_inc_mor<-data.frame(t(kidney_inc_mor))[-1, ]
+colnames(kidney_inc_mor) <- colnam
+kidney_inc_mor$year <- 1943:2020
+
+### Subseting years 1961-2020
+kidney_inc_mor <- kidney_inc_mor[kidney_inc_mor$year > 1960, ]
+kidney_inc_mor[1:4, 1:4]
+
+### Removing space character and converting characters to numbers
+for(x in 1:dim(kidney_inc_mor)[2]){
+kidney_inc_mor[,x] <- str_trim(kidney_inc_mor[,x])
+kidney_inc_mor[,x] <- as.numeric(kidney_inc_mor[,x]) }
+summary(kidney_inc_mor) 
+
+
+# bladder data 
+urlfile="https://raw.githubusercontent.com/filip-tichanek/nord_kidney/main/source/bladder_inc_mor.csv"
+bladder_inc_mor <- read.csv(url(urlfile),sep=",")
+colnam <- bladder_inc_mor[,1]
+bladder_inc_mor <- data.frame(t(bladder_inc_mor))[-1,]
+colnames(bladder_inc_mor) <- colnam
+bladder_inc_mor$year <- 1943:2020
+
+## Subseting years 1961-2020
+bladder_inc_mor <- bladder_inc_mor[bladder_inc_mor$year>1960,]
+bladder_inc_mor[1:4, 1:4]
+
+## Removing space character and converting characters to numbers
+for (x in 1:dim(kidney_inc_mor)[2]){
+  bladder_inc_mor[,x] <- str_trim(bladder_inc_mor[,x])
+  bladder_inc_mor[,x] <- as.numeric(bladder_inc_mor[,x]) }
+summary(bladder_inc_mor) 
+```
+
+## Plotting
+
+```{r, fig.width = 6.3, fig.height = 7.3}
+
+## General setting and titles of plots
+
+m <- matrix(c(9,1,2
+             ,3,5,6
+             ,4,7,8), nrow = 3, ncol =3 ,byrow = TRUE)
+layout(mat = m,heights = c(0.04,0.96/2,0.96/2),widths = c(0.04,0.96/2,0.96/2))
+par(mgp=c(1.6,0.8,0))
+par(mar=c(0,0,0,0))
+
+plot(NULL, axes = FALSE,xlab = "", ylab = "", xlim=c(-1,1), ylim = c(-0.85, 0.85))
+text(0, -0.2, "Kidney cancer", cex = 1.8, font = 3, xpd=TRUE)
+plot(NULL, axes=FALSE, xlab = "", ylab="", xlim = c(-1,1),ylim=c(-0.85,0.85))
+text(0, -0.2, "Bladder cancer", cex = 1.8, font = 3, xpd = TRUE)
+
+par(mar=c(2, 0, 0, 0))
+plot(NULL, axes = FALSE, xlab = "", ylab = "", xlim = c(-1,1), ylim=c(0,1))
+text(-0.2, 0.5, "Incidence per 100,000 (ASR - World)", cex = 1.5, srt=90)
+
+par(mar = c(2, 0, 0, 0))
+plot(NULL, axes = FALSE, xlab = "", ylab = "", xlim = c(-1, 1), ylim = c(0, 1))
+text(-0.2, 0.5, "Mortality per 100,000 (ASR - World)", cex = 1.5, srt = 90)
+
+# Kidney incidence plot
+
+data = kidney_inc_mor
+par(mgp = c(1.4, 0.6, 0))
+par(mar = c(2, 0.5, 0, 0))
+tckk = -0.017
+
+range <- c(0, 14); scal <- range[2]-range[1]
+xrange <- c(1961, 2020)
+plot(NULL, xlim = xrange, ylim = c(range[1], range[2]), xlab="", ylab="" ,las=1, axes=FALSE)
+rect(xrange[1],range[2],xrange[2],range[1],col="white", border=NA)
+x <- range[1]
+repeat{
+  lines(c(xrange[1], xrange[2]), c(x, x),col = "grey90", lwd = 0.7)
+  x=x+2;if(x>range[2]){break}}
+
+x<- round(xrange[1]+5,-1)
+repeat{
+  lines(c(x,x), c(range[1],  range[2]),col= "grey96", lwd = 0.7)
+  x=x+10; if(x>2020){break}}
+
+data = kidney_inc_mor
+
+for (xx in 1:4){
+smoothingSpline = smooth.spline(data$year, data[,xx], spar=spar, nknots=knot)
+lines(smoothingSpline, col= colc[xx], lty = 1, lwd = 2, lend = 1)}
+
+for (xx in 5:8){
+  smoothingSpline = smooth.spline(data$year, data[,xx], spar=spar, nknots=knot)
+  lines(smoothingSpline, col = colc[xx-4], lty=4, lwd=2, lend=1) }
+
+axis(2, las = 2, cex.axis = 1.4, at = seq(range[1], range[2], by=2),
+     labels = c(rep("", length(seq(range[1], range[2], by = 2)))),
+     pos = xrange[1], tck = tckk)
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=2),
+     pos=xrange[1],tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(round(xrange[1]+5,-1),2020,by=10)),pos=range[1],
+     labels=c(rep("",length(c(seq(round(xrange[1]+5,-1),2020,by=10))))),tck=tckk)
+lines(c(xrange[1],xrange[2]),c(range[1],range[1]))
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(round(xrange[1]+5,-1),2020,by=20)),
+     pos=range[1],tck=tckk)
+title(xlab="Year", line=1, cex.lab=1.4,xpd=TRUE)
+text(1965,range[2]-0.05*scal,"a",cex=2.5)
+
+xx=1;yy=range[1]+scal*0.22
+rect(1987,yy+0.035*scal,2015,yy-0.18*scal,col="white",border="grey50",lwd=0.8)
+repeat{
+  lines(c(1999.5,2001.7),c(yy,yy),lwd=10,col=cola[xx],lend=1)
+  xx<-xx+1;yy=yy-(scal*0.05);if(xx>4){break}}
+
+text(1993,0.21*scal,"Males",cex=1.25)
+lines(c(1988.3,1997.1),c(0.16*scal,0.16*scal),lwd=2)
+
+text(1993,0.12*scal,"Females",cex=1.25)
+lines(c(1988.3,1997.1),c(0.07*scal,0.07*scal),lwd=2,lty=4)
+
+xx=1;yy=range[1]+scal*0.22
+text(2008.5,yy,"Denmark",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.05)
+text(2008.5,yy,"Finland",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.05)
+text(2008.5,yy,"Norway",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.05)
+text(2008.5,yy,"Sweden",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.05)
+
+# Bladder incidence plot
+
+data=bladder_inc_mor
+
+range<-c(0,32);scal<-range[2]-range[1]
+xrange<-c(1961,2020)
+
+plot(NULL,xlim=xrange,ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+rect(xrange[1],range[2],xrange[2],range[1],col="white",border=NA)
+x<-range[1]
+repeat{
+  lines(c(xrange[1],xrange[2]),c(x,x),col="grey96",lwd=0.7)
+  x=x+2;if(x>range[2]){break}}
+
+x<- round(xrange[1]+5,-1)
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+data=bladder_inc_mor
+for (xx in 1:4){
+  smoothingSpline = smooth.spline(data$year, data[,xx], spar=spar, nknots=knot)
+  lines(smoothingSpline,col=colc[xx],lty=1,lwd=2,lend=1) }
+
+for (xx in 5:8){
+  smoothingSpline = smooth.spline(data$year, data[,xx], spar=spar, nknots=knot)
+  lines(smoothingSpline,col=colc[xx-4],lty=4,lwd=2,lend=1) }
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=2),
+     labels=c(rep("",length(seq(range[1],range[2],by=2)))),
+     pos=xrange[1],tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=4),
+     pos=xrange[1],tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(round(xrange[1]+5,-1),2020,by=10)),pos=range[1],
+     labels=c(rep("",length(c(seq(round(xrange[1]+5,-1),2020,by=10))))),tck=tckk)
+lines(c(xrange[1],xrange[2]),c(range[1],range[1]))
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(round(xrange[1]+5,-1),2020,by=20)),
+     pos=range[1],tck=tckk)
+title(xlab="Year", line=1, cex.lab=1.4,xpd=TRUE)
+
+text(1965,range[2]-0.05*scal,"b",cex=2.5)
+
+
+# kidney mortality
+
+### WARNING! Due to a bug in NORDCAN database (Denmark mortality data in 1969),
+### some data were removed from table (these evidently incorrect).
+### The bug was reported to NORDCAN secretary on 7th of November, 2022
+
+data=kidney_inc_mor
+  
+  range<-c(0,6);scal<-range[2]-range[1]
+  xrange<-c(1961,2020)
+  
+  plot(NULL,xlim=xrange,ylim=c(range[1],range[2]),xlab="",ylab=""
+       ,las=1, axes=FALSE)
+  rect(xrange[1],range[2],xrange[2],range[1],col="white",border=NA)
+  x<-range[1]
+  repeat{
+    lines(c(xrange[1],xrange[2]),c(x,x),col="grey96",lwd=0.7)
+    x=x+2;if(x>range[2]){break}}
+  
+  x<- round(xrange[1]+5,-1)
+  repeat{
+    lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+    x=x+10;if(x>2020){break}}
+  
+for (xx in 9:12){
+    data = na.omit(kidney_inc_mor[,c(xx,17)] )
+    smoothingSpline = smooth.spline(data[,2], data[,1], spar=spar, nknots=knot)
+    lines(smoothingSpline,col=colc[xx-8],lty=1,lwd=2,lend=1) }
+  
+for (xx in 13:16){
+    data = na.omit(kidney_inc_mor[,c(xx,17)] )
+    smoothingSpline = smooth.spline(data[,2], data[,1], spar=spar, nknots=knot)
+      lines(smoothingSpline,col=colc[xx-12],lty=4,lwd=2,lend=1) }
+  
+  
+  axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=2),
+       labels=c(rep("",length(seq(range[1],range[2],by=2)))),
+       pos=xrange[1],tck=tckk)
+  axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=2),
+       pos=xrange[1],tck=tckk)
+  axis(side=1,las=1,cex.axis=1.4,at=c(seq(round(xrange[1]+5,-1),2020,by=10)),pos=range[1],
+       labels=c(rep("",length(c(seq(round(xrange[1]+5,-1),2020,by=10))))),tck=tckk)
+  lines(c(xrange[1],xrange[2]),c(range[1],range[1]))
+  axis(side=1,las=1,cex.axis=1.4,at=c(seq(round(xrange[1]+5,-1),2020,by=20)),
+       pos=range[1],tck=tckk)
+  title(xlab="Year", line=1, cex.lab=1.4,xpd=TRUE)
+  text(1965,range[2]-0.05*scal,"c",cex=2.5)
+
+  
+  
+# bladder mortality
+  
+### WARNING! Due to a bug in NORDCAN database (Denmark mortality data in 1969),
+### some data were removed from table (these evidently incorrect).
+### The bug was reported to NORDCAN secretary on 7th of November, 2022
+  
+  data=bladder_inc_mor
+  range<-c(0,12);scal<-range[2]-range[1]
+  xrange<-c(1961,2020)
+  
+  plot(NULL,xlim=xrange,ylim=c(range[1],range[2]),xlab="",ylab=""
+       ,las=1, axes=FALSE)
+  rect(xrange[1],range[2],xrange[2],range[1],col="white",border=NA)
+  x<-range[1]
+  repeat{
+    lines(c(xrange[1],xrange[2]),c(x,x),col="grey96",lwd=0.7)
+    x=x+2;if(x>range[2]){break}}
+  
+x<- round(xrange[1]+5,-1)
+  repeat{
+    lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+    x=x+10;if(x>2020){break}}
+  
+ for (xx in 9:12){
+    data= na.omit(bladder_inc_mor[,c(xx,17)] )
+    smoothingSpline = smooth.spline(data[,2], data[,1], spar=spar, nknots=knot)
+    lines(smoothingSpline, col=colc[xx-8],lty=1,lwd=2,lend=1) }
+  
+ for (xx in 13:16){
+    data = na.omit(bladder_inc_mor[,c(xx,17)] )
+    smoothingSpline = smooth.spline(data[,2], data[,1], spar=spar, nknots=knot)
+    lines(smoothingSpline, col=colc[xx-12],lty=4,lwd=2,lend=1)}
+  
+  axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=2),
+       labels=c(rep("",length(seq(range[1],range[2],by=2)))),
+       pos=xrange[1],tck=tckk)
+  
+  axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=2),
+       pos=xrange[1],tck=tckk)
+  
+  axis(side=1,las=1,cex.axis=1.4,at=c(seq(round(xrange[1]+5,-1),2020,by=10)),pos=range[1],
+       labels=c(rep("",length(c(seq(round(xrange[1]+5,-1),2020,by=10))))),tck=tckk)
+  lines(c(xrange[1],xrange[2]),c(range[1],range[1]))
+  axis(side=1,las=1,cex.axis=1.4,at=c(seq(round(xrange[1]+5,-1),2020,by=20)),
+       pos=range[1],tck=tckk)
+  title(xlab="Year", line=1, cex.lab=1.4,xpd=TRUE)
+  
+  text(1965,range[2]-0.05*scal,"d",cex=2.5)
+  
+```
+
+# Survival trends
+
+This code aim to time trends in the survival of kidney and bladder cancers, using Bayesian Generalized Additive Models. Data were downloaded from [NORDCAN](https://nordcan.iarc.fr/en/dataviz/survival?sexes=2&cancers=180_230_190_200_220&populations=752&mode=cancer&multiple_populations=0&multiple_cancers=1&survival=1) website.
+
+```{r}
+cola<-c(
+  rgb(1, 0, 0, alpha=1),
+  rgb(0.2,0.2,1,alpha=1),
+  rgb(0, 0.7, 0,alpha=1),
+  rgb(0.7,0.7,0.1,alpha=1))
+
+alp=0.18;colb<-c(
+  rgb(1, 0, 0, alpha=alp),
+  rgb(0.2, 0.2, 1, alpha=alp),
+  rgb(0, 0.9, 0,alpha=alp),
+  rgb(0.7,0.7,0.1,alpha=alp))
+
+colc<-c(
+  rgb(1,0,0,alpha=0.8),
+  rgb(0.2,0.2,1,alpha=0.8),
+  rgb(0, 0.9, 0,alpha=0.8),
+  rgb(0.7,0.7,0.1,alpha=0.8))
+```
+
+### Data upload
+
+```{r}
+# Kidney data upload
+urlfile <- "https://raw.githubusercontent.com/filip-tichanek/nord_kidney/main/source/kidney_1y.csv"
+kidney_1y <- read.csv(url(urlfile),sep=";")
+
+urlfile <- "https://raw.githubusercontent.com/filip-tichanek/nord_kidney/main/source/kidney_5y.csv"
+kidney_5y <- read.csv(url(urlfile),sep=";")
+
+# Bladder data upload
+urlfile <- "https://raw.githubusercontent.com/filip-tichanek/nord_kidney/main/source/bladder_1y.csv"
+bladder_1y <- read.csv(url(urlfile),sep=";")
+
+urlfile <- "https://raw.githubusercontent.com/filip-tichanek/nord_kidney/main/source/bladder_5y.csv"
+bladder_5y <- read.csv(url(urlfile),sep=";")
+```
+
+### Kidney data wrangling
+
+```{r}
+kidney_1y_est<-data.frame(kidney_1y[, 1])
+for (x in 2:9){
+  kidney_1y_est[,x] <- str_sub(kidney_1y[, x], 1, 4) }
+
+for (x in 10:17){
+  kidney_1y_est[,x]<-str_sub(kidney_1y[, x-8], 6, 9) }
+
+kidney_5y_est<-data.frame(kidney_5y[,1])
+for (x in 2:9){kidney_5y_est[,x] <- str_sub(kidney_5y[,x], 1, 4) }
+for (x in 10:17){kidney_5y_est[,x] <- str_sub(kidney_5y[,x-8], 6, 9) }
+
+kidney<-(data.frame(unlist(kidney_1y_est[,2:9])));colnames(kidney)<-"surv_1y"
+kidney$cil_1y<-as.numeric(unlist(kidney_1y_est[,10:17]))
+kidney$surv_5y<-as.numeric(unlist(kidney_5y_est[,2:9]))
+kidney$cil_5y<-as.numeric(unlist(kidney_5y_est[,10:17]))
+kidney$year<-rep(seq(1973,2018,by=5),8)
+kidney$sex<-c(rep("Males",40),rep("Females",40))
+kidney$country<-c(rep(c(rep("Denmark",10), rep("Finland",10), rep("Norway",10),
+                        rep("Sweden",10)),2))
+kidney$shou<-c(rep(c(rep("den_mal_",10), rep("fin_mal_",10), rep("nor_mal_",10),
+                     rep("swe_mal_",10), rep("den_fem_",10), rep("fin_fem_",10),
+                     rep("nor_fem_",10), rep("swe_fem_",10)),1))
+kidney$group<-interaction(kidney$country,kidney$sex)
+kidney$years10cen<-(kidney$year-1995.5)/10
+kidney$surv_1y<-as.numeric(kidney$surv_1y)
+kidney$surv_5y<-as.numeric(kidney$surv_5y)
+kidney$cil_1y<-as.numeric(kidney$cil_1y)
+kidney$cil_5y<-as.numeric(kidney$cil_5y)
+kidney$se_1y<-(kidney$surv_1y-kidney$cil_1y)/1.96
+kidney$se_5y<-(kidney$surv_5y-kidney$cil_5y)/1.96
+kidney$surv_cond<-(kidney$surv_5y/kidney$surv_1y)*100
+summary(kidney)
+```
+
+### Bladder data wrangling
+
+```{r}
+x<-2;bladder_1y_est<-data.frame(bladder_1y[,1])
+for(x in 2:9){bladder_1y_est[,x] <- str_sub(bladder_1y[,x], 1, 4) }
+for(x in 10:17){bladder_1y_est[,x] <- str_sub(bladder_1y[,x-8], 6, 9) }
+bladder_5y_est<-data.frame(bladder_5y[,1])
+for(x in 2:9){bladder_5y_est[,x] <- str_sub(bladder_5y[,x], 1, 4) }
+for(x in 10:17){bladder_5y_est[,x] <- str_sub(bladder_5y[,x-8], 6, 9) }
+
+bladder<-(data.frame(unlist(bladder_1y_est[,2:9])));colnames(bladder)<-"surv_1y"
+bladder$cil_1y<-as.numeric(unlist(bladder_1y_est[,10:17]))
+bladder$surv_5y<-as.numeric(unlist(bladder_5y_est[,2:9]))
+bladder$cil_5y<-as.numeric(unlist(bladder_5y_est[,10:17]))
+bladder$year<-rep(seq(1973,2018,by=5),8)
+bladder$sex<-c(rep("Males",40),rep("Females",40))
+bladder$country<-c(rep(c(rep("Denmark",10),rep("Finland",10),rep("Norway",10),
+                         rep("Sweden",10)),2))
+bladder$shou<-c(rep(c(rep("den_mal_",10),rep("fin_mal_",10),rep("nor_mal_",10),
+                      rep("swe_mal_",10),rep("den_fem_",10),rep("fin_fem_",10),
+                      rep("nor_fem_",10),rep("swe_fem_",10)),1))
+bladder$group<-interaction(bladder$country,bladder$sex)
+bladder$years10cen<-(bladder$year-1995.5)/10
+bladder$surv_1y<-as.numeric(bladder$surv_1y)
+bladder$surv_5y<-as.numeric(bladder$surv_5y)
+bladder$cil_1y<-as.numeric(bladder$cil_1y)
+bladder$cil_5y<-as.numeric(bladder$cil_5y)
+bladder$se_1y<-(bladder$surv_1y-bladder$cil_1y)/1.96
+bladder$se_5y<-(bladder$surv_5y-bladder$cil_5y)/1.96
+bladder$surv_cond<-(bladder$surv_5y/bladder$surv_1y)*100
+summary(bladder)
+```
+
+## Modelling of survival trends
+
+### Prior probabilities specification
+
+```{r}
+prior_group <- c(
+set_prior("normal(0,30)", class = "b", coef = "groupFinland.Males"),
+set_prior("normal(0,30)", class = "b", coef = "groupNorway.Males"),
+set_prior("normal(0,30)", class = "b", coef = "groupSweden.Males"),
+set_prior("normal(0,30)", class = "b", coef = "groupDenmark.Males"),
+set_prior("normal(0,30)", class = "b", coef = "groupNorway.Females"),
+set_prior("normal(0,30)", class = "b", coef = "groupFinland.Females"),
+set_prior("normal(0,30)", class = "b", coef = "groupSweden.Females"))
+```
+
+### Fitting models of kidney survival
+
+```{r}
+#| output: false
+#| warning: false
+#| error: false
+set.seed(17)
+kidney_1y_model <- brm(surv_1y|se(se_1y) ~ group + s(years10cen, by=group, k=5),
+                       family="Gaussian", 
+                       prior = prior_group, 
+                       data = kidney, seed = 17,
+                       iter = 7000, warmup = 2000, chains = 2, cores = 1,
+                       control = list(adapt_delta = 0.98),
+                       save_pars = save_pars(all = TRUE))
+
+kidney_5y_model <- brm(surv_5y|se(se_5y) ~ group + s(years10cen, by=group, k=5),
+                       family="Gaussian", 
+                       prior = prior_group, 
+                       data = kidney, seed = 17,
+                       iter = 7000, warmup = 2000, chains = 2, cores = 1,
+                       control = list(adapt_delta = 0.98),
+                       save_pars = save_pars(all = TRUE))
+```
+
+### Fitting models of bladder cancer
+
+```{r}
+#| output: false
+#| warning: false
+#| error: false
+set.seed(17)
+bladder_1y_model <- brm(surv_1y|se(se_1y) ~ group + s(years10cen, by=group,k=5),
+                       family="Gaussian", 
+                       prior = prior_group, 
+                       data = bladder, seed = 17,
+                       iter = 7000, warmup = 2000, chains = 2, cores = 1,
+                       control = list(adapt_delta = 0.98),
+                       save_pars = save_pars(all = TRUE))
+
+bladder_5y_model <- brm(surv_5y|se(se_5y) ~ group + s(years10cen, by=group,k=5),
+                       family="Gaussian", 
+                       prior = prior_group, 
+                       data = bladder, seed = 17,
+                       iter = 7000, warmup = 2000, chains = 2, cores = 1,
+                       control = list(adapt_delta = 0.98),
+                       save_pars = save_pars(all = TRUE))
+```
+
+### Diagnostics
+
+Checking effective sample size of posterior samples, convergence of the models and posterior predictive check (PPC)
+
+In general, diagnostics uses:
+
+\(i\) *summary(model)*: the columns of intereste are ***Rhat*** (when = 1, model converged well), and columns ***Tail_ESS*** and ***Bulk_ESS*** which should never go under 1,000 and should be mostly above 2,000.
+
+\[2\] ***pp_check*** : graphical tools to explore how well the model predicts real data, as thoroughly described by Gelman [here](http://www.stat.columbia.edu/~gelman/book/). Ideally, there should not be strong discrepancy between the model prediction and the distribution of the real dataset.
+
+You can use also *plot(model)* to see convergence of chains graphically and to explore posterior distribution of parameters, estimated via the models
+
+Finally, we will also use a function *prior_summary* to explore the prior probabilities set
+
+#### Kidney 1y model
+
+```{r}
+#| warning: false
+#| error: false
+summary(kidney_1y_model)
+pp_check(kidney_1y_model, type='dens_overlay', ndraws = 100)
+pp_check(kidney_1y_model, type='scatter_avg') 
+pp_check(kidney_1y_model, type = "stat", stat = "mean")
+pp_check(kidney_1y_model, type="stat_2d", stat = c("max", "min"), ndraws=100)
+pp_check(kidney_1y_model, type="stat_2d", stat = c("mean", "sd"), ndraws=100)
+prior_summary(kidney_1y_model)
+```
+
+\>\> Everything seems to be fine: For all parameters, *Rhat* = 1, *ESS* is above 2000 and PPC show relatively good correspondence between the predicted and the real data.
+
+#### Kidney 5y model
+
+```{r}
+#| warning: false
+#| error: false
+summary(kidney_5y_model)
+pp_check(kidney_5y_model, type='dens_overlay', ndraws = 100)
+pp_check(kidney_5y_model, type='scatter_avg') 
+pp_check(kidney_5y_model, type = "stat", stat = "mean")
+pp_check(kidney_5y_model, type="stat_2d", stat = c("max", "min"), ndraws=100)
+pp_check(kidney_5y_model, type="stat_2d", stat = c("mean", "sd"), ndraws=100)
+prior_summary(kidney_5y_model)
+```
+
+\>\> Everything seems fine.
+
+#### Bladder 1y model
+
+```{r}
+#| warning: false
+#| error: false
+summary(bladder_1y_model)
+pp_check(bladder_1y_model, type='dens_overlay', ndraws = 100)
+pp_check(bladder_1y_model, type='scatter_avg') 
+pp_check(bladder_1y_model, type = "stat", stat = "mean")
+pp_check(bladder_1y_model, type="stat_2d", stat = c("max", "min"), ndraws=100)
+pp_check(bladder_1y_model, type="stat_2d", stat = c("mean", "sd"), ndraws=100)
+prior_summary(bladder_1y_model)
+```
+
+\>\> Everything seems fine.
+
+#### Bladder 5y model
+
+```{r}
+#| warning: false
+#| error: false
+summary(bladder_5y_model)
+pp_check(bladder_5y_model, type='dens_overlay', ndraws = 100)
+pp_check(bladder_5y_model, type='scatter_avg') 
+pp_check(bladder_5y_model, type = "stat", stat = "mean")
+pp_check(bladder_5y_model, type="stat_2d", stat = c("max", "min"), ndraws=100)
+pp_check(bladder_5y_model, type="stat_2d", stat = c("mean", "sd"), ndraws=100)
+prior_summary(bladder_5y_model)
+```
+
+\>\> Everything seems fine.
+
+## Custom functions
+
+All the functions below serve for plotting of nonlinear trends in survival and related uncertainty. All the functions below use extracted posterior samples as an input **data**. The samples represent estimation of survival over the 50 years (1971 to 2020) for specific country, cancer, and type of survival (1-year, 5-years, conditional \[5y/1y\]. The time period of 50 years must be divided to sequence of 500 numbers (1/10 of a year).
+
+### *breakpo*
+
+This function serves to identify ***breaking points***, i.e. times when the annual change of survival changed with at least 95% plausibility. This was assessed by calculation of the 2nd derivation of the given survival measure and its 95% credible interval (CI); the '*breaking point*' was defined as a peak value within at least a 3-year interval where 95% CI for the 2nd derivation did not cross zero. If the 2nd derivation is plausibly non-zero for at least 3 years, the function takes the peak in the 2nd derivation (within the identified time interval) as the *breaking point* (must be between the years 1976 and 2016).
+
+Function also returns table of potential *brekaing points*, if they were identified.
+
+There is one additional argument *arb* which should be zero except for the situation when the multiple breaking points overlap. The argument only move the breaking points by given value to avoid overlapping.
+
+```{r}
+breakpo<-function(data,arb){ 
+ data<-data.frame((data[,-1] - data[,-ncol(data)])*10)
+  data<-data.frame(data[,-1] - data[,-ncol(data)])
+  data=sapply(data, function(p) quantile(p, probs = c(0.025,0.975,0.5)))
+  cbinl<-c()
+  x=1
+  repeat{
+    cbinl[x]<-
+      if(data[1,x]>0|data[2,x]<0){cbinl[x]=1}else{cbinl[x]=0}
+    x<-x+1
+    if(x>length(data[1,])){break}}
+  cbin=1;x<-1
+  repeat{
+    cbin[x+1]<-abs(cbinl[x]-cbinl[x+1])
+    x=x+1
+    if(x>(length(cbinl)-1)){break}}
+  data<-data.frame(rbind(data,cbin));data[5,]<-yreal[c(2:499)]-0.049
+  data[6,]<-1:498;data[4,51]<-1;data[4,449]<-1
+  row.names(data)<-c("cil","ciu","est","stat_change","year","timepoint")
+  data2=t(data[,data[4,]==1])
+  data2<-data.frame(data2)
+  tr<-subset(data2,data2$timepoint>50&data2$timepoint<450)
+  y=1
+  bp<-c()
+  bx<-1
+  repeat{
+    if( (tr[y,1]<0) & (tr[y,2]<0) & (  (tr$year[y+1]-tr$year[y])>3   )  ) {
+      tr2<-data[,tr[y,6]:(tr[y+1,6]-2)]
+      bp[bx]<- tr2[,order(tr2[3,],decreasing=F)[1]][5]
+      bx=bx+1
+    }
+    if( (tr[y,1]>0) & (tr[y,2]>0) & (  (tr$year[y+1]-tr$year[y])>3   )) {
+      tr2<-data[,tr[y,6]:(tr[y+1,6]-2)]
+      bp[bx]<- tr2[,order(tr2[3,],decreasing=T)[1]][5]
+      bx=bx+1
+    }
+    y=y+1;if(y>(dim(tr)[1]-1)){break}}
+  y<-1
+  try(repeat{
+    lines(c(bp[y]+arb,bp[y]+arb),c(range[1],range[1]+0.025*scal),col=cola[xx],lwd=3.5,lend=1)
+    lines(c(bp[y]+arb,bp[y]+arb),c(range[2],range[2]-0.025*scal),col=cola[xx],lwd=3.5,lend=1)
+    lines(c(bp[y]+arb,bp[y]+arb),c(range[1],range[1]+0.999*scal),col=colc[xx],lwd=1,lend=1,lty=2)
+    y=y+1;if(y>length(bp)){break}},silent=TRUE)
+ print(bp)
+ print(tr)
+  }
+```
+
+### *polyg_surv*
+
+for drawing 95% credible interval for survival indicators
+
+```{r}
+polyg_surv<-function(data){ 
+  data<-data.frame(data)
+  data<-sapply(data, function(p) quantile(p, probs = c(0.025,0.975,0.5)))
+  cis<-c(data[1,],rev(data[2,]))
+  x<-c(yreal[1:500],yreal[500:1])
+  cis[cis<range[1]]<-range[1]
+  cis[cis>range[2]]<-range[2]
+  polygon(x,cis,border=NA,col=colb[xx],xpd=F)}
+```
+
+### *surv_fit*
+
+Fit curve of survival trend over the 50 years. **Solid lines** imply that that the curve is increasing or decreasing with at least 95% plausibility (95% credible interval for 1st derivation of estimated survival does not cross zero) for at least 5 years. Dashed lines show otherwise (no detectable change in the survival)
+
+```{r}
+surv_fit<-function(dat2){
+  dat2=data.frame(dat2)
+  cis= data.frame((dat2[,-1] - dat2[,-ncol(dat2)])*10)
+  cis=sapply(cis, function(p) quantile(p, probs = c(0.025,0.975)))
+  est=sapply(dat2, function(p) quantile(p, probs = c(0.5)))
+  data=cis
+  cbinl<-c()
+  x=1
+  repeat{
+    cbinl[x]<-
+      if(data[1,x]>0|data[2,x]<0){cbinl[x]=1}else{cbinl[x]=0}
+    x<-x+1
+    if(x>length(data[1,])){break}}
+  cbin=1;x<-1
+  repeat{
+    cbin[x+1]<-abs(cbinl[x]-cbinl[x+1])
+    x=x+1
+    if(x>(length(cbinl)-1)){break}}
+  data<-data.frame(rbind(data,cbin));data[4,]<-yreal[c(2:500)]-0.049;data[5,]<-1:499
+  row.names(data)<-c("cil","ciu","stat_change","year","timepoint");data[3,499]<-1
+  data2=t(data[,data[3,]==1])
+  data2<-data.frame(data2)
+  tr<-data2;y=1
+  yreal=seq(1971,2020,length=500)
+  repeat{
+    if((((tr[y,1]<0)&(tr[y,2])<0))|(((tr[y,1]>0)&(tr[y,2])>0))&(tr[y+1,4]-tr[y,4])>5)
+    {lines(yreal[tr[y,5]:tr[y+1,5]],
+           est[tr[y,5]:tr[y+1,5]],lwd=1.9,col=cola[xx],lend=1)}
+    y<-y+1;if(y>dim(tr)[1]-1){break}}
+  lines(yreal[1:500],est,lwd=1,col=cola[xx],lty=2,lend=1)}
+```
+
+### *polyg_slope*
+
+Draws 95% credible interval for slope of the survival trend (1st derivation of the estimated survival trend)
+
+```{r}
+polyg_slope<-function(data){ 
+  x<-c(yreal[1:499],yreal[499:1])
+  data<-data.frame((data[,-1] - data[,-ncol(data)]))*10
+  data=sapply(data, function(p) quantile(p, probs = c(0.025,0.975,0.5)))
+  cis<-c(data[1,],rev(data[2,]))
+  cis[cis<range[1]]<-range[1]
+  cis[cis>range[2]]<-range[2]
+  polygon(x,cis,border=NA,col=colb[xx])}
+```
+
+### *slope_fit*
+
+Fit curve of **slope** (i.e., the **magnitude of the change**) of the survival trend over the 50 years. Solid lines imply that that the curve is increasing or decreasing with at least 95% plausibility (95% credible interval for 2st derivation of estimated survival does not cross zero) for at least 3 years. Dashed lines show otherwise (no detectable change in the slope of the survival trend)
+
+```{r}
+slope_fit<-function(data){
+  data = data.frame((data[,-1] - data[,-ncol(data)])*10)
+  dar2<-sapply(data, function(p) quantile(p, probs = c(0.5)))
+  data<-data.frame(data[,-1] - data[,-ncol(data)])
+  data=sapply(data, function(p) quantile(p, probs = c(0.025,0.975,0.5)))
+  cbinl<-c()
+  x=1
+  repeat{
+    cbinl[x]<-
+      if(data[1,x]>0|data[2,x]<0){cbinl[x]=1}else{cbinl[x]=0}
+    x<-x+1
+    if(x>length(data[1,])){break}}
+  cbin=1;x<-1
+  repeat{
+    cbin[x+1]<-abs(cbinl[x]-cbinl[x+1])
+    x=x+1
+    if(x>(length(cbinl)-1)){break}}
+  data<-data.frame(rbind(data,cbin));data[5,]<-yreal[c(2:499)]-0.049;data[6,]<-1:498
+  row.names(data)<-c("cil","ciu","est","stat_change","year","timepoint")
+  data[4,450]<-1
+  data[4,50]<-1
+  data=data[,50:450]
+  lines(yreal[1:499],dar2,lwd=1,col=cola[xx],lty=2,lend=1)
+  data2=(t(data[,data[4,]==1]))
+  data2<-data.frame(data2)
+  tr<-data2;y=1
+  yreal=seq(1971,2020,length=498)
+  repeat{
+    if(((((tr[y,1]<0)&(tr[y,2])<0))|(((tr[y,1]>0)&(tr[y,2])>0)))&(tr[y+1,5]-tr[y,5])>3)
+    {lines(yreal[tr[y,6]:tr[y+1,6]],
+           dar2[tr[y,6]:tr[y+1,6]]
+           ,lwd=1.9,col=cola[xx],lend=1)}
+    y<-y+1;if(y>dim(tr)[1]-1){break}}
+  }
+```
+
+## Extraction of posterior samples
+
+It will be used to visualize the predictions of the models jointly with showing uncertainty of model estimations
+
+```{r}
+## kidney posterior extraction ---------------------------------------------------
+yreal <- seq(1971,2020,length=500)
+first <- expand.grid(years10cen = ((yreal-1995.5)/10),
+                     group = c('Denmark.Females','Finland.Females',
+                               'Norway.Females','Sweden.Females',
+                               'Denmark.Males','Finland.Males',
+                               'Norway.Males','Sweden.Males'), y = 0)
+
+ms_1y<-posterior_smooths(kidney_1y_model,smooth="s(years10cen,by=group,k=5)",
+                         newdata = first)
+post_fix<-as.data.frame(kidney_1y_model, 
+                        variable = c("b_Intercept","b_groupFinland.Females",
+                                     "b_groupNorway.Females","b_groupSweden.Females",
+                                     "b_groupDenmark.Males","b_groupFinland.Males",
+                                     "b_groupNorway.Males","b_groupSweden.Males"))
+fixef(kidney_1y_model)
+post_kidney_den_fem_1y<-ms_1y[,1:500]     +post_fix[,1]
+post_kidney_fin_fem_1y<-ms_1y[,501:1000]  +post_fix[,1]+post_fix[,2]
+post_kidney_nor_fem_1y<-ms_1y[,1001:1500] +post_fix[,1]+post_fix[,3]
+post_kidney_swe_fem_1y<-ms_1y[,1501:2000] +post_fix[,1]+post_fix[,4]
+post_kidney_den_mal_1y<-ms_1y[,2001:2500] +post_fix[,1]+post_fix[,5]
+post_kidney_fin_mal_1y<-ms_1y[,2501:3000] +post_fix[,1]+post_fix[,6]
+post_kidney_nor_mal_1y<-ms_1y[,3001:3500] +post_fix[,1]+post_fix[,7]
+post_kidney_swe_mal_1y<-ms_1y[,3501:4000] +post_fix[,1]+post_fix[,8]
+
+post_fix<-as.data.frame(kidney_5y_model,
+                        variable = c("b_Intercept","b_groupFinland.Females",
+                                     "b_groupNorway.Females","b_groupSweden.Females",
+                                     "b_groupDenmark.Males","b_groupFinland.Males",
+                                     "b_groupNorway.Males","b_groupSweden.Males"))
+
+ms_5y<-posterior_smooths(kidney_5y_model,smooth="s(years10cen,by=group,k=5)",
+                         newdata = first)
+post_kidney_den_fem_5y<-ms_5y[,1:500]     +post_fix[,1]
+post_kidney_fin_fem_5y<-ms_5y[,501:1000]  +post_fix[,1]+post_fix[,2]
+post_kidney_nor_fem_5y<-ms_5y[,1001:1500] +post_fix[,1]+post_fix[,3]
+post_kidney_swe_fem_5y<-ms_5y[,1501:2000] +post_fix[,1]+post_fix[,4]
+post_kidney_den_mal_5y<-ms_5y[,2001:2500] +post_fix[,1]+post_fix[,5]
+post_kidney_fin_mal_5y<-ms_5y[,2501:3000] +post_fix[,1]+post_fix[,6]
+post_kidney_nor_mal_5y<-ms_5y[,3001:3500] +post_fix[,1]+post_fix[,7]
+post_kidney_swe_mal_5y<-ms_5y[,3501:4000] +post_fix[,1]+post_fix[,8]
+
+post_kidney_den_fem_cond<-(post_kidney_den_fem_5y/post_kidney_den_fem_1y)*100
+post_kidney_den_mal_cond<-(post_kidney_den_mal_5y/post_kidney_den_mal_1y)*100
+post_kidney_fin_fem_cond<-(post_kidney_fin_fem_5y/post_kidney_fin_fem_1y)*100
+post_kidney_fin_mal_cond<-(post_kidney_fin_mal_5y/post_kidney_fin_mal_1y)*100
+post_kidney_nor_fem_cond<-(post_kidney_nor_fem_5y/post_kidney_nor_fem_1y)*100
+post_kidney_nor_mal_cond<-(post_kidney_nor_mal_5y/post_kidney_nor_mal_1y)*100
+post_kidney_swe_fem_cond<-(post_kidney_swe_fem_5y/post_kidney_swe_fem_1y)*100
+post_kidney_swe_mal_cond<-(post_kidney_swe_mal_5y/post_kidney_swe_mal_1y)*100
+
+
+## bladder posterior extraction ---------------------------------------------------
+ms_1y<-posterior_smooths(bladder_1y_model,smooth="s(years10cen,by=group,k=5)",
+                         newdata = first)
+post_fix<-as.data.frame(bladder_1y_model,
+                        variable = c("b_Intercept","b_groupFinland.Females",
+                                     "b_groupNorway.Females","b_groupSweden.Females",
+                                     "b_groupDenmark.Males","b_groupFinland.Males",
+                                     "b_groupNorway.Males","b_groupSweden.Males"))
+
+post_bladder_den_fem_1y<-ms_1y[,1:500]     +post_fix[,1]
+post_bladder_fin_fem_1y<-ms_1y[,501:1000]  +post_fix[,1]+post_fix[,2]
+post_bladder_nor_fem_1y<-ms_1y[,1001:1500] +post_fix[,1]+post_fix[,3]
+post_bladder_swe_fem_1y<-ms_1y[,1501:2000] +post_fix[,1]+post_fix[,4]
+post_bladder_den_mal_1y<-ms_1y[,2001:2500] +post_fix[,1]+post_fix[,5]
+post_bladder_fin_mal_1y<-ms_1y[,2501:3000] +post_fix[,1]+post_fix[,6]
+post_bladder_nor_mal_1y<-ms_1y[,3001:3500] +post_fix[,1]+post_fix[,7]
+post_bladder_swe_mal_1y<-ms_1y[,3501:4000] +post_fix[,1]+post_fix[,8]
+
+post_fix<-as.data.frame(bladder_5y_model,
+                        variable = c("b_Intercept","b_groupFinland.Females",
+                                     "b_groupNorway.Females","b_groupSweden.Females",
+                                     "b_groupDenmark.Males","b_groupFinland.Males",
+                                     "b_groupNorway.Males","b_groupSweden.Males"))
+ms_5y<-posterior_smooths(bladder_5y_model,smooth="s(years10cen,by=group,k=5)",
+                         newdata = first)
+
+post_bladder_den_fem_5y<-ms_5y[,1:500]     +post_fix[,1]
+post_bladder_fin_fem_5y<-ms_5y[,501:1000]  +post_fix[,1]+post_fix[,2]
+post_bladder_nor_fem_5y<-ms_5y[,1001:1500] +post_fix[,1]+post_fix[,3]
+post_bladder_swe_fem_5y<-ms_5y[,1501:2000] +post_fix[,1]+post_fix[,4]
+post_bladder_den_mal_5y<-ms_5y[,2001:2500] +post_fix[,1]+post_fix[,5]
+post_bladder_fin_mal_5y<-ms_5y[,2501:3000] +post_fix[,1]+post_fix[,6]
+post_bladder_nor_mal_5y<-ms_5y[,3001:3500] +post_fix[,1]+post_fix[,7]
+post_bladder_swe_mal_5y<-ms_5y[,3501:4000] +post_fix[,1]+post_fix[,8]
+
+post_bladder_den_fem_cond<-(post_bladder_den_fem_5y/post_bladder_den_fem_1y)*100
+post_bladder_den_mal_cond<-(post_bladder_den_mal_5y/post_bladder_den_mal_1y)*100
+post_bladder_fin_fem_cond<-(post_bladder_fin_fem_5y/post_bladder_fin_fem_1y)*100
+post_bladder_fin_mal_cond<-(post_bladder_fin_mal_5y/post_bladder_fin_mal_1y)*100
+post_bladder_nor_fem_cond<-(post_bladder_nor_fem_5y/post_bladder_nor_fem_1y)*100
+post_bladder_nor_mal_cond<-(post_bladder_nor_mal_5y/post_bladder_nor_mal_1y)*100
+post_bladder_swe_fem_cond<-(post_bladder_swe_fem_5y/post_bladder_swe_fem_1y)*100
+post_bladder_swe_mal_cond<-(post_bladder_swe_mal_5y/post_bladder_swe_mal_1y)*100
+```
+
+## Visualisations
+
+### Denmark
+
+```{r, fig.width = 6.75, fig.height = 7.8}
+#| warning: false
+#| error: false
+#| fig-cap: 
+#|   - "Relative 1- , 5/1- and 5-year survival in Danish men (a, b) and women (c, d) in kidney (a, c) and bladder (b, d) cancers. The vertical lines show significant breakpoints in survival trends and bottom curves show estimated annual changes in survival. The solid line in survival curves and annual change curve indicate a plausible trend (see methods) whereas dotted lines suggest otherwise. Shaded regions indicate 95% Bayesian credible intervals. All curves are color coded (see the insert)."
+
+## DEN figures 
+m <- matrix(c(15,1 ,2
+              ,3,7 ,11
+              ,4,8 ,12
+              ,5,9 ,13
+              ,6,10,14), nrow = 5, ncol =3 ,byrow = TRUE)
+layout(mat = m,heights = c(0.03,0.6/2,0.37/2,0.6/2,0.37/2),
+       widths = c(0.04,rep(0.96/2,2)))
+par(mgp=c(1.6,0.62,0))
+par(mar=c(0,0,0,0))
+
+
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),ylim=c(-0.85,0.85))
+text(0,-0.2,"Kidney cancer",cex=1.6,font=3,xpd=TRUE)
+
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),ylim=c(-0.85,0.85))
+text(0,-0.2,"Bladder cancer",cex=1.6,font=3,xpd=TRUE)
+
+
+range_b<-c(20,100);scal_b<-range_b[2]-range_b[1]
+range_c<-c(-0.5,2);scal_c<-range_c[2]-range_c[1]
+
+range<-range_b;scal=scal_b
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_b[1],range_b[2]))
+text(0,range_b[1]+scal_b*0.5,"Relative survival (%) in males", cex=1.4,srt=90)
+
+
+range<-range_c;scal=scal_c
+par(mar=c(2.5,0,0,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_c[1],range_c[2]))
+text(0,range_c[1]+scal_c*0.5,"Annual change",
+     cex=1.4,srt=90)
+
+range<-range_b;scal=scal_b
+par(mar=c(0,0,0,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_b[1],range_b[2]))
+text(0,range_b[1]+scal_b*0.5,"Relative survival (%) in females", cex=1.4,srt=90)
+
+
+range<-range_c;scal=scal_c
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_c[1],range_c[2]))
+text(0,range_c[1]+scal_c*0.5,"Annual change",
+     cex=1.4,srt=90)
+
+
+### kidney  % ------------------------------------------------------
+#### males --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+
+  xx=1
+  try(breakpo(post_kidney_den_mal_1y,-0.6), silent = TRUE )
+  xx=xx+1
+  try(breakpo(post_kidney_den_mal_cond,0), silent = TRUE)
+  xx=xx+1
+  try(breakpo(post_kidney_den_mal_5y,0.6),silent = TRUE)
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_kidney_den_mal_1y);xx=xx+1
+polyg_surv(post_kidney_den_mal_cond);xx=xx+1
+polyg_surv(post_kidney_den_mal_5y)
+
+# data points of estimated survival
+xx=1
+points(kidney[kidney$shou=="den_mal_",]$surv_1y~kidney[kidney$shou=="den_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="den_mal_",]$surv_cond~kidney[kidney$shou=="den_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="den_mal_",]$surv_5y~kidney[kidney$shou=="den_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_kidney_den_mal_1y);xx=xx+1
+surv_fit(post_kidney_den_mal_cond);xx=xx+1
+surv_fit(post_kidney_den_mal_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+
+# legend
+xpo=0
+ypo=0.25
+xx=1;yy=range[1]+scal*ypo
+rect(2004.3+xpo,yy+0.035*scal,2019+xpo,yy-0.17*scal,col="grey97",border="grey50",lwd=0.8)
+repeat{
+  points(2007+xpo,yy,pch=17,col=cola[xx],cex=1.2)
+  lines(c(2005+xpo,2009+xpo),c(yy,yy),lwd=1.6,col=cola[xx],lend=1)
+  xx<-xx+1;yy=yy-(scal*0.063);if(xx>3){break}}
+xx=1;yy=range[1]+scal*ypo
+text(2014+xpo,yy,"1-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(2014+xpo,yy,"5/1-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(2014+xpo,yy,"5-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(1973,range[2]-0.05*scal,"a",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_kidney_den_mal_1y);xx=xx+1
+polyg_slope(post_kidney_den_mal_cond);xx=xx+1
+polyg_slope(post_kidney_den_mal_5y)
+
+xx=1
+slope_fit(post_kidney_den_mal_1y);xx=xx+1
+slope_fit(post_kidney_den_mal_cond);xx=xx+1
+slope_fit(post_kidney_den_mal_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+#### females --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_kidney_den_fem_1y,-0.6)
+xx=xx+1
+breakpo(post_kidney_den_fem_cond,0)
+xx=xx+1
+breakpo(post_kidney_den_fem_5y,0.6)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_kidney_den_fem_1y);xx=xx+1
+polyg_surv(post_kidney_den_fem_cond);xx=xx+1
+polyg_surv(post_kidney_den_fem_5y)
+
+# data points of estimated survival
+xx=1
+points(kidney[kidney$shou=="den_fem_",]$surv_1y~kidney[kidney$shou=="den_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="den_fem_",]$surv_cond~kidney[kidney$shou=="den_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="den_fem_",]$surv_5y~kidney[kidney$shou=="den_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_kidney_den_fem_1y);xx=xx+1
+surv_fit(post_kidney_den_fem_cond);xx=xx+1
+surv_fit(post_kidney_den_fem_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"c",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_kidney_den_fem_1y);xx=xx+1
+polyg_slope(post_kidney_den_fem_cond);xx=xx+1
+polyg_slope(post_kidney_den_fem_5y)
+
+xx=1
+slope_fit(post_kidney_den_fem_1y);xx=xx+1
+slope_fit(post_kidney_den_fem_cond);xx=xx+1
+slope_fit(post_kidney_den_fem_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+
+
+### bladder
+#### males 
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_bladder_den_mal_1y,0)
+xx=xx+1
+breakpo(post_bladder_den_mal_cond,0)
+xx=xx+1
+breakpo(post_bladder_den_mal_5y,0)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_bladder_den_mal_1y);xx=xx+1
+polyg_surv(post_bladder_den_mal_cond);xx=xx+1
+polyg_surv(post_bladder_den_mal_5y)
+
+# data points of estimated survival
+xx=1
+points(bladder[bladder$shou=="den_mal_",]$surv_1y~bladder[bladder$shou=="den_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="den_mal_",]$surv_cond~bladder[bladder$shou=="den_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="den_mal_",]$surv_5y~bladder[bladder$shou=="den_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_bladder_den_mal_1y);xx=xx+1
+surv_fit(post_bladder_den_mal_cond);xx=xx+1
+surv_fit(post_bladder_den_mal_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"b",cex=2.2)
+
+ypo=-55
+xfl=50
+rect(1958+xfl,range[1]+scal*0.965+ypo,1965+xfl,range[1]+scal*0.84+ypo,col="red2",border="grey50")
+rect(1958+xfl,range[1]+scal*0.9135+ypo,1965+xfl,range[1]+scal*0.8865+ypo,col="grey96",border=NA)
+rect(1960.5+xfl,range[1]+scal*0.965+ypo,1961.5+xfl,range[1]+scal*0.84+ypo,col="grey96",border=NA)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_bladder_den_mal_1y);xx=xx+1
+polyg_slope(post_bladder_den_mal_cond);xx=xx+1
+polyg_slope(post_bladder_den_mal_5y)
+
+xx=1
+slope_fit(post_bladder_den_mal_1y);xx=xx+1
+slope_fit(post_bladder_den_mal_cond);xx=xx+1
+slope_fit(post_bladder_den_mal_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+#### females --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_bladder_den_fem_1y,-0.6)
+xx=xx+1
+breakpo(post_bladder_den_fem_cond,0)
+xx=xx+1
+breakpo(post_bladder_den_fem_5y,0.6)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_bladder_den_fem_1y);xx=xx+1
+polyg_surv(post_bladder_den_fem_cond);xx=xx+1
+polyg_surv(post_bladder_den_fem_5y)
+
+# data points of estimated survival
+xx=1
+points(bladder[bladder$shou=="den_fem_",]$surv_1y~bladder[bladder$shou=="den_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="den_fem_",]$surv_cond~bladder[bladder$shou=="den_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="den_fem_",]$surv_5y~bladder[bladder$shou=="den_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_bladder_den_fem_1y);xx=xx+1
+surv_fit(post_bladder_den_fem_cond);xx=xx+1
+surv_fit(post_bladder_den_fem_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"d",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_bladder_den_fem_1y);xx=xx+1
+polyg_slope(post_bladder_den_fem_cond);xx=xx+1
+polyg_slope(post_bladder_den_fem_5y)
+
+xx=1
+slope_fit(post_bladder_den_fem_1y);xx=xx+1
+slope_fit(post_bladder_den_fem_cond);xx=xx+1
+slope_fit(post_bladder_den_fem_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+```
+
+### Finland
+
+```{r, fig.width = 6.75, fig.height = 7.8}
+#| warning: false
+#| error: false
+#| fig-cap: 
+#|   - "Relative 1- , 5/1- and 5-year survival in Finnish men (a, b) and women (c, d) in kidney (a, c) and bladder (b, d) cancers. The vertical lines show significant breakpoints in survival trends and bottom curves show estimated annual changes in survival. The solid line in survival curves and annual change curve indicate a plausible trend whereas dotted lines suggest otherwise. Shaded regions indicate 95% Bayesian credible intervals. All curves are color coded (see the insert)."
+
+## FIN figures --------------------------- -----------------
+m <- matrix(c(15,1 ,2
+              ,3,7 ,11
+              ,4,8 ,12
+              ,5,9 ,13
+              ,6,10,14), nrow = 5, ncol =3 ,byrow = TRUE)
+layout(mat = m,heights = c(0.03,0.6/2,0.37/2,0.6/2,0.37/2),
+       widths = c(0.04,rep(0.96/2,2)))
+par(mgp=c(1.6,0.62,0))
+par(mar=c(0,0,0,0))
+
+
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),ylim=c(-0.85,0.85))
+text(0,-0.2,"Kidney cancer",cex=1.6,font=3,xpd=TRUE)
+
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),ylim=c(-0.85,0.85))
+text(0,-0.2,"Bladder cancer",cex=1.6,font=3,xpd=TRUE)
+
+
+range_b<-c(20,100);scal_b<-range_b[2]-range_b[1]
+range_c<-c(-0.5,2);scal_c<-range_c[2]-range_c[1]
+
+range<-range_b;scal=scal_b
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_b[1],range_b[2]))
+text(0,range_b[1]+scal_b*0.5,"Relative survival (%) in males", cex=1.4,srt=90)
+
+
+range<-range_c;scal=scal_c
+par(mar=c(2.5,0,0,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_c[1],range_c[2]))
+text(0,range_c[1]+scal_c*0.5,"Annual change",
+     cex=1.4,srt=90)
+
+range<-range_b;scal=scal_b
+par(mar=c(0,0,0,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_b[1],range_b[2]))
+text(0,range_b[1]+scal_b*0.5,"Relative survival (%) in females", cex=1.4,srt=90)
+
+
+range<-range_c;scal=scal_c
+par(mar=c(2.5,0,0.2,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_c[1],range_c[2]))
+text(0,range_c[1]+scal_c*0.5,"Annual change",
+     cex=1.4,srt=90)
+
+
+### kidney  % ------------------------------------------------------
+#### males --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_kidney_fin_mal_1y,0.6)
+xx=xx+1
+breakpo(post_kidney_fin_mal_cond,0)
+xx=xx+1
+breakpo(post_kidney_fin_mal_5y,-0.6)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_kidney_fin_mal_1y);xx=xx+1
+polyg_surv(post_kidney_fin_mal_cond);xx=xx+1
+polyg_surv(post_kidney_fin_mal_5y)
+
+# data points of estimated survival
+xx=1
+points(kidney[kidney$shou=="fin_mal_",]$surv_1y~kidney[kidney$shou=="fin_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="fin_mal_",]$surv_cond~kidney[kidney$shou=="fin_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="fin_mal_",]$surv_5y~kidney[kidney$shou=="fin_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_kidney_fin_mal_1y);xx=xx+1
+surv_fit(post_kidney_fin_mal_cond);xx=xx+1
+surv_fit(post_kidney_fin_mal_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+
+# legend
+xpo=0
+ypo=0.25
+xx=1;yy=range[1]+scal*ypo
+rect(2004.3+xpo,yy+0.035*scal,2019+xpo,yy-0.17*scal,col="grey97",border="grey50",lwd=0.8)
+repeat{
+  points(2007+xpo,yy,pch=17,col=cola[xx],cex=1.2)
+  lines(c(2005+xpo,2009+xpo),c(yy,yy),lwd=1.6,col=cola[xx],lend=1)
+  xx<-xx+1;yy=yy-(scal*0.063);if(xx>3){break}}
+xx=1;yy=range[1]+scal*ypo
+text(2014+xpo,yy,"1-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(2014+xpo,yy,"5/1-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(2014+xpo,yy,"5-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(1973,range[2]-0.05*scal,"a",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_kidney_fin_mal_1y);xx=xx+1
+polyg_slope(post_kidney_fin_mal_cond);xx=xx+1
+polyg_slope(post_kidney_fin_mal_5y)
+
+xx=1
+slope_fit(post_kidney_fin_mal_1y);xx=xx+1
+slope_fit(post_kidney_fin_mal_cond);xx=xx+1
+slope_fit(post_kidney_fin_mal_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+#### females --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_kidney_fin_fem_1y,0)
+xx=xx+1
+breakpo(post_kidney_fin_fem_cond,0)
+xx=xx+1
+breakpo(post_kidney_fin_fem_5y,0)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_kidney_fin_fem_1y);xx=xx+1
+polyg_surv(post_kidney_fin_fem_cond);xx=xx+1
+polyg_surv(post_kidney_fin_fem_5y)
+
+# data points of estimated survival
+xx=1
+points(kidney[kidney$shou=="fin_fem_",]$surv_1y~kidney[kidney$shou=="fin_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="fin_fem_",]$surv_cond~kidney[kidney$shou=="fin_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="fin_fem_",]$surv_5y~kidney[kidney$shou=="fin_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_kidney_fin_fem_1y);xx=xx+1
+surv_fit(post_kidney_fin_fem_cond);xx=xx+1
+surv_fit(post_kidney_fin_fem_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"c",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_kidney_fin_fem_1y);xx=xx+1
+polyg_slope(post_kidney_fin_fem_cond);xx=xx+1
+polyg_slope(post_kidney_fin_fem_5y)
+
+xx=1
+slope_fit(post_kidney_fin_fem_1y);xx=xx+1
+slope_fit(post_kidney_fin_fem_cond);xx=xx+1
+slope_fit(post_kidney_fin_fem_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+
+
+### bladder  % ------------------------------------------------------
+#### males --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_bladder_fin_mal_1y,0.6)
+xx=xx+1
+breakpo(post_bladder_fin_mal_cond,0)
+xx=xx+1
+breakpo(post_bladder_fin_mal_5y,-0.6)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_bladder_fin_mal_1y);xx=xx+1
+polyg_surv(post_bladder_fin_mal_cond);xx=xx+1
+polyg_surv(post_bladder_fin_mal_5y)
+
+# data points of estimated survival
+xx=1
+points(bladder[bladder$shou=="fin_mal_",]$surv_1y~bladder[bladder$shou=="fin_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="fin_mal_",]$surv_cond~bladder[bladder$shou=="fin_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="fin_mal_",]$surv_5y~bladder[bladder$shou=="fin_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_bladder_fin_mal_1y);xx=xx+1
+surv_fit(post_bladder_fin_mal_cond);xx=xx+1
+surv_fit(post_bladder_fin_mal_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"b",cex=2.2)
+
+ypo=-55
+xfl=50
+rect(1958+xfl,range[1]+scal*0.965+ypo,1965+xfl,range[1]+scal*0.84+ypo,col="grey96",border="grey50")
+rect(1958+xfl,range[1]+scal*0.9135+ypo,1965+xfl,range[1]+scal*0.8865+ypo,col="dodgerblue3",border=NA)
+rect(1960.5+xfl,range[1]+scal*0.965+ypo,1961.5+xfl,range[1]+scal*0.84+ypo,col="dodgerblue3",border=NA)
+
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_bladder_fin_mal_1y);xx=xx+1
+polyg_slope(post_bladder_fin_mal_cond);xx=xx+1
+polyg_slope(post_bladder_fin_mal_5y)
+
+xx=1
+slope_fit(post_bladder_fin_mal_1y);xx=xx+1
+slope_fit(post_bladder_fin_mal_cond);xx=xx+1
+slope_fit(post_bladder_fin_mal_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+#### females --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_bladder_fin_fem_1y,-0.6)
+xx=xx+1
+breakpo(post_bladder_fin_fem_cond,0)
+xx=xx+1
+breakpo(post_bladder_fin_fem_5y,0.6)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_bladder_fin_fem_1y);xx=xx+1
+polyg_surv(post_bladder_fin_fem_cond);xx=xx+1
+polyg_surv(post_bladder_fin_fem_5y)
+
+# data points of estimated survival
+xx=1
+points(bladder[bladder$shou=="fin_fem_",]$surv_1y~bladder[bladder$shou=="fin_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="fin_fem_",]$surv_cond~bladder[bladder$shou=="fin_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="fin_fem_",]$surv_5y~bladder[bladder$shou=="fin_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_bladder_fin_fem_1y);xx=xx+1
+surv_fit(post_bladder_fin_fem_cond);xx=xx+1
+surv_fit(post_bladder_fin_fem_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"d",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_bladder_fin_fem_1y);xx=xx+1
+polyg_slope(post_bladder_fin_fem_cond);xx=xx+1
+polyg_slope(post_bladder_fin_fem_5y)
+
+xx=1
+slope_fit(post_bladder_fin_fem_1y);xx=xx+1
+slope_fit(post_bladder_fin_fem_cond);xx=xx+1
+slope_fit(post_bladder_fin_fem_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+```
+
+### Norway
+
+```{r, fig.width = 6.75, fig.height = 7.8}
+#| warning: false
+#| error: false
+#| fig-cap: 
+#|   - "Relative 1- , 5/1- and 5-year survival in Norwish men (a, b) and women (c, d) in kidney (a, c) and bladder (b, d) cancers. The vertical lines show significant breakpoints in survival trends and bottom curves show estimated annual changes in survival. The solid line in survival curves and annual change curve indicate a plausible trend whereas dotted lines suggest otherwise. Shaded regions indicate 95% Bayesian credible intervals. All curves are color coded (see the insert)."
+
+## NOR figures --------------------------- -----------------
+m <- matrix(c(15,1 ,2
+              ,3,7 ,11
+              ,4,8 ,12
+              ,5,9 ,13
+              ,6,10,14), nrow = 5, ncol =3 ,byrow = TRUE)
+layout(mat = m,heights = c(0.03,0.6/2,0.37/2,0.6/2,0.37/2),
+       widths = c(0.04,rep(0.96/2,2)))
+par(mgp=c(1.6,0.62,0))
+par(mar=c(0,0,0,0))
+
+
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),ylim=c(-0.85,0.85))
+text(0,-0.2,"Kidney cancer",cex=1.6,font=3,xpd=TRUE)
+
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),ylim=c(-0.85,0.85))
+text(0,-0.2,"Bladder cancer",cex=1.6,font=3,xpd=TRUE)
+
+
+range_b<-c(20,100);scal_b<-range_b[2]-range_b[1]
+range_c<-c(-0.5,2);scal_c<-range_c[2]-range_c[1]
+
+range<-range_b;scal=scal_b
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_b[1],range_b[2]))
+text(0,range_b[1]+scal_b*0.5,"Relative survival (%) in males", cex=1.4,srt=90)
+
+
+range<-range_c;scal=scal_c
+par(mar=c(2.5,0,0,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_c[1],range_c[2]))
+text(0,range_c[1]+scal_c*0.5,"Annual change",
+     cex=1.4,srt=90)
+
+range<-range_b;scal=scal_b
+par(mar=c(0,0,0,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_b[1],range_b[2]))
+text(0,range_b[1]+scal_b*0.5,"Relative survival (%) in females", cex=1.4,srt=90)
+
+
+range<-range_c;scal=scal_c
+par(mar=c(2.5,0,0.2,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_c[1],range_c[2]))
+text(0,range_c[1]+scal_c*0.5,"Annual change",
+     cex=1.4,srt=90)
+
+
+### kidney  % ------------------------------------------------------
+#### males --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_kidney_nor_mal_1y,-0.6)
+xx=xx+1
+breakpo(post_kidney_nor_mal_cond,0)
+xx=xx+1
+breakpo(post_kidney_nor_mal_5y,0.6)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_kidney_nor_mal_1y);xx=xx+1
+polyg_surv(post_kidney_nor_mal_cond);xx=xx+1
+polyg_surv(post_kidney_nor_mal_5y)
+
+# data points of estimated survival
+xx=1
+points(kidney[kidney$shou=="nor_mal_",]$surv_1y~kidney[kidney$shou=="nor_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="nor_mal_",]$surv_cond~kidney[kidney$shou=="nor_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="nor_mal_",]$surv_5y~kidney[kidney$shou=="nor_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_kidney_nor_mal_1y);xx=xx+1
+surv_fit(post_kidney_nor_mal_cond);xx=xx+1
+surv_fit(post_kidney_nor_mal_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+
+# legend
+xpo=0
+ypo=0.25
+xx=1;yy=range[1]+scal*ypo
+rect(2004.3+xpo,yy+0.035*scal,2019+xpo,yy-0.17*scal,col="grey97",border="grey50",lwd=0.8)
+repeat{
+  points(2007+xpo,yy,pch=17,col=cola[xx],cex=1.2)
+  lines(c(2005+xpo,2009+xpo),c(yy,yy),lwd=1.6,col=cola[xx],lend=1)
+  xx<-xx+1;yy=yy-(scal*0.063);if(xx>3){break}}
+xx=1;yy=range[1]+scal*ypo
+text(2014+xpo,yy,"1-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(2014+xpo,yy,"5/1-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(2014+xpo,yy,"5-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(1973,range[2]-0.05*scal,"a",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_kidney_nor_mal_1y);xx=xx+1
+polyg_slope(post_kidney_nor_mal_cond);xx=xx+1
+polyg_slope(post_kidney_nor_mal_5y)
+
+xx=1
+slope_fit(post_kidney_nor_mal_1y);xx=xx+1
+slope_fit(post_kidney_nor_mal_cond);xx=xx+1
+slope_fit(post_kidney_nor_mal_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+#### females --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_kidney_nor_fem_1y,0)
+xx=xx+1
+breakpo(post_kidney_nor_fem_cond,0)
+xx=xx+1
+breakpo(post_kidney_nor_fem_5y,0)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_kidney_nor_fem_1y);xx=xx+1
+polyg_surv(post_kidney_nor_fem_cond);xx=xx+1
+polyg_surv(post_kidney_nor_fem_5y)
+
+# data points of estimated survival
+xx=1
+points(kidney[kidney$shou=="nor_fem_",]$surv_1y~kidney[kidney$shou=="nor_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="nor_fem_",]$surv_cond~kidney[kidney$shou=="nor_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="nor_fem_",]$surv_5y~kidney[kidney$shou=="nor_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_kidney_nor_fem_1y);xx=xx+1
+surv_fit(post_kidney_nor_fem_cond);xx=xx+1
+surv_fit(post_kidney_nor_fem_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"c",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_kidney_nor_fem_1y);xx=xx+1
+polyg_slope(post_kidney_nor_fem_cond);xx=xx+1
+polyg_slope(post_kidney_nor_fem_5y)
+
+xx=1
+slope_fit(post_kidney_nor_fem_1y);xx=xx+1
+slope_fit(post_kidney_nor_fem_cond);xx=xx+1
+slope_fit(post_kidney_nor_fem_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+
+
+### bladder  % ------------------------------------------------------
+#### males --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_bladder_nor_mal_1y,0)
+xx=xx+1
+breakpo(post_bladder_nor_mal_cond,0)
+xx=xx+1
+breakpo(post_bladder_nor_mal_5y,0)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_bladder_nor_mal_1y);xx=xx+1
+polyg_surv(post_bladder_nor_mal_cond);xx=xx+1
+polyg_surv(post_bladder_nor_mal_5y)
+
+# data points of estimated survival
+xx=1
+points(bladder[bladder$shou=="nor_mal_",]$surv_1y~bladder[bladder$shou=="nor_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="nor_mal_",]$surv_cond~bladder[bladder$shou=="nor_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="nor_mal_",]$surv_5y~bladder[bladder$shou=="nor_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_bladder_nor_mal_1y);xx=xx+1
+surv_fit(post_bladder_nor_mal_cond);xx=xx+1
+surv_fit(post_bladder_nor_mal_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"b",cex=2.2)
+
+ypo=-55
+xfl=50
+
+rect(1958+xfl,range[1]+scal*0.965+ypo,1965+xfl,range[1]+scal*0.84+ypo,col="red2",border="grey50")
+rect(1958+xfl,range[1]+scal*0.9285+ypo,1965+xfl,range[1]+scal*0.8735+ypo,col="grey96",border=NA)
+rect(1959.5+xfl,range[1]+scal*0.965+ypo,1962.2+xfl,range[1]+scal*0.84+ypo,col="grey96",border=NA)
+rect(1958+xfl,range[1]+scal*0.9135+ypo,1965+xfl,range[1]+scal*0.8865+ypo,col="darkblue",border=NA)
+rect(1960.3+xfl,range[1]+scal*0.965+ypo,1961.5+xfl,range[1]+scal*0.84+ypo,col="darkblue",border=NA)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_bladder_nor_mal_1y);xx=xx+1
+polyg_slope(post_bladder_nor_mal_cond);xx=xx+1
+polyg_slope(post_bladder_nor_mal_5y)
+
+xx=1
+slope_fit(post_bladder_nor_mal_1y);xx=xx+1
+slope_fit(post_bladder_nor_mal_cond);xx=xx+1
+slope_fit(post_bladder_nor_mal_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+#### females --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_bladder_nor_fem_1y,0)
+xx=xx+1
+breakpo(post_bladder_nor_fem_cond,0)
+xx=xx+1
+breakpo(post_bladder_nor_fem_5y,0)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_bladder_nor_fem_1y);xx=xx+1
+polyg_surv(post_bladder_nor_fem_cond);xx=xx+1
+polyg_surv(post_bladder_nor_fem_5y)
+
+# data points of estimated survival
+xx=1
+points(bladder[bladder$shou=="nor_fem_",]$surv_1y~bladder[bladder$shou=="nor_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="nor_fem_",]$surv_cond~bladder[bladder$shou=="nor_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="nor_fem_",]$surv_5y~bladder[bladder$shou=="nor_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_bladder_nor_fem_1y);xx=xx+1
+surv_fit(post_bladder_nor_fem_cond);xx=xx+1
+surv_fit(post_bladder_nor_fem_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"d",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_bladder_nor_fem_1y);xx=xx+1
+polyg_slope(post_bladder_nor_fem_cond);xx=xx+1
+polyg_slope(post_bladder_nor_fem_5y)
+
+xx=1
+slope_fit(post_bladder_nor_fem_1y);xx=xx+1
+slope_fit(post_bladder_nor_fem_cond);xx=xx+1
+slope_fit(post_bladder_nor_fem_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+```
+
+### Sweden
+
+```{r, fig.width = 6.75, fig.height = 7.8}
+#| warning: false
+#| error: false
+#| fig-cap: 
+#|   - "Relative 1- , 5/1- and 5-year survival in Swedish men (a, b) and women (c, d) in kidney (a, c) and bladder (b, d) cancers. The vertical lines show significant breakpoints in survival trends and bottom curves show estimated annual changes in survival. The solid line in survival curves and annual change curve indicate a plausible trend whereas dotted lines suggest otherwise. Shaded regions indicate 95% Bayesian credible intervals. All curves are color coded (see the insert)."
+
+#  SWE figures --------------------------- -----------------
+m <- matrix(c(15,1 ,2
+              ,3,7 ,11
+              ,4,8 ,12
+              ,5,9 ,13
+              ,6,10,14), nrow = 5, ncol =3 ,byrow = TRUE)
+layout(mat = m,heights = c(0.03,0.6/2,0.37/2,0.6/2,0.37/2),
+       widths = c(0.04,rep(0.96/2,2)))
+par(mgp=c(1.6,0.62,0))
+par(mar=c(0,0,0,0))
+
+
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),ylim=c(-0.85,0.85))
+text(0,-0.2,"Kidney cancer",cex=1.6,font=3,xpd=TRUE)
+
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),ylim=c(-0.85,0.85))
+text(0,-0.2,"Bladder cancer",cex=1.6,font=3,xpd=TRUE)
+
+
+range_b<-c(20,100);scal_b<-range_b[2]-range_b[1]
+range_c<-c(-0.5,2);scal_c<-range_c[2]-range_c[1]
+
+range<-range_b;scal=scal_b
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_b[1],range_b[2]))
+text(0,range_b[1]+scal_b*0.5,"Relative survival (%) in males", cex=1.4,srt=90)
+
+
+range<-range_c;scal=scal_c
+par(mar=c(2.5,0,0,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_c[1],range_c[2]))
+text(0,range_c[1]+scal_c*0.5,"Annual change",
+     cex=1.4,srt=90)
+
+range<-range_b;scal=scal_b
+par(mar=c(0,0,0,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_b[1],range_b[2]))
+text(0,range_b[1]+scal_b*0.5,"Relative survival (%) in females", cex=1.4,srt=90)
+
+
+range<-range_c;scal=scal_c
+par(mar=c(2.5,0,0.2,0))
+plot(NULL, axes=FALSE,xlab="",ylab="",xlim=c(-1,1),
+     ylim=c(range_c[1],range_c[2]))
+text(0,range_c[1]+scal_c*0.5,"Annual change",
+     cex=1.4,srt=90)
+
+
+### kidney  % ------------------------------------------------------
+#### males --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_kidney_swe_mal_1y,0.6)
+xx=xx+1
+breakpo(post_kidney_swe_mal_cond,0)
+xx=xx+1
+breakpo(post_kidney_swe_mal_5y,-0.6)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_kidney_swe_mal_1y);xx=xx+1
+polyg_surv(post_kidney_swe_mal_cond);xx=xx+1
+polyg_surv(post_kidney_swe_mal_5y)
+
+# data points of estimated survival
+xx=1
+points(kidney[kidney$shou=="swe_mal_",]$surv_1y~kidney[kidney$shou=="swe_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="swe_mal_",]$surv_cond~kidney[kidney$shou=="swe_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="swe_mal_",]$surv_5y~kidney[kidney$shou=="swe_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_kidney_swe_mal_1y);xx=xx+1
+surv_fit(post_kidney_swe_mal_cond);xx=xx+1
+surv_fit(post_kidney_swe_mal_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+
+# legend
+xpo=0
+ypo=0.25
+xx=1;yy=range[1]+scal*ypo
+rect(2004.3+xpo,yy+0.035*scal,2019+xpo,yy-0.17*scal,col="grey97",border="grey50",lwd=0.8)
+repeat{
+  points(2007+xpo,yy,pch=17,col=cola[xx],cex=1.2)
+  lines(c(2005+xpo,2009+xpo),c(yy,yy),lwd=1.6,col=cola[xx],lend=1)
+  xx<-xx+1;yy=yy-(scal*0.063);if(xx>3){break}}
+xx=1;yy=range[1]+scal*ypo
+text(2014+xpo,yy,"1-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(2014+xpo,yy,"5/1-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(2014+xpo,yy,"5-year",col=cola[xx],cex=1.25);xx=xx+1;yy=yy-(scal*0.063)
+text(1973,range[2]-0.05*scal,"a",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_kidney_swe_mal_1y);xx=xx+1
+polyg_slope(post_kidney_swe_mal_cond);xx=xx+1
+polyg_slope(post_kidney_swe_mal_5y)
+
+xx=1
+slope_fit(post_kidney_swe_mal_1y);xx=xx+1
+slope_fit(post_kidney_swe_mal_cond);xx=xx+1
+slope_fit(post_kidney_swe_mal_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+#### females --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_kidney_swe_fem_1y,0)
+xx=xx+1
+breakpo(post_kidney_swe_fem_cond,0)
+xx=xx+1
+breakpo(post_kidney_swe_fem_5y,0)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_kidney_swe_fem_1y);xx=xx+1
+polyg_surv(post_kidney_swe_fem_cond);xx=xx+1
+polyg_surv(post_kidney_swe_fem_5y)
+
+# data points of estimated survival
+xx=1
+points(kidney[kidney$shou=="swe_fem_",]$surv_1y~kidney[kidney$shou=="swe_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="swe_fem_",]$surv_cond~kidney[kidney$shou=="swe_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(kidney[kidney$shou=="swe_fem_",]$surv_5y~kidney[kidney$shou=="swe_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_kidney_swe_fem_1y);xx=xx+1
+surv_fit(post_kidney_swe_fem_cond);xx=xx+1
+surv_fit(post_kidney_swe_fem_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"c",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_kidney_swe_fem_1y);xx=xx+1
+polyg_slope(post_kidney_swe_fem_cond);xx=xx+1
+polyg_slope(post_kidney_swe_fem_5y)
+
+xx=1
+slope_fit(post_kidney_swe_fem_1y);xx=xx+1
+slope_fit(post_kidney_swe_fem_cond);xx=xx+1
+slope_fit(post_kidney_swe_fem_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+
+
+### bladder  % ------------------------------------------------------
+#### males --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_bladder_swe_mal_1y,0.6)
+xx=xx+1
+breakpo(post_bladder_swe_mal_cond,0)
+xx=xx+1
+breakpo(post_bladder_swe_mal_5y,-0.6)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_bladder_swe_mal_1y);xx=xx+1
+polyg_surv(post_bladder_swe_mal_cond);xx=xx+1
+polyg_surv(post_bladder_swe_mal_5y)
+
+# data points of estimated survival
+xx=1
+points(bladder[bladder$shou=="swe_mal_",]$surv_1y~bladder[bladder$shou=="swe_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="swe_mal_",]$surv_cond~bladder[bladder$shou=="swe_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="swe_mal_",]$surv_5y~bladder[bladder$shou=="swe_mal_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_bladder_swe_mal_1y);xx=xx+1
+surv_fit(post_bladder_swe_mal_cond);xx=xx+1
+surv_fit(post_bladder_swe_mal_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"b",cex=2.2)
+
+ypo=-55
+xfl=50
+rect(1958+xfl,range[1]+scal*0.965+ypo,1965+xfl,range[1]+scal*0.84+ypo,col="blue",border="grey50")
+rect(1958+xfl,range[1]+scal*0.9135+ypo,1965+xfl,range[1]+scal*0.8865+ypo,col="yellow",border=NA)
+rect(1960.5+xfl,range[1]+scal*0.965+ypo,1961.5+xfl,range[1]+scal*0.84+ypo,col="yellow",border=NA)
+
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_bladder_swe_mal_1y);xx=xx+1
+polyg_slope(post_bladder_swe_mal_cond);xx=xx+1
+polyg_slope(post_bladder_swe_mal_5y)
+
+xx=1
+slope_fit(post_bladder_swe_mal_1y);xx=xx+1
+slope_fit(post_bladder_swe_mal_cond);xx=xx+1
+slope_fit(post_bladder_swe_mal_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+
+
+
+#### females --------------
+range<-range_b;scal=scal_b
+par(mgp=c(1.6,0.4,0))
+par(mar=c(0,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-10
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+10;if(x>100){break}}
+lines(c(1971,2020),c(50,50),col="grey96",lwd=1.7)
+
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+# breaking points identification
+xx=1
+breakpo(post_bladder_swe_fem_1y,0)
+xx=xx+1
+breakpo(post_bladder_swe_fem_cond,0)
+xx=xx+1
+breakpo(post_bladder_swe_fem_5y,0)
+
+# 95% credible interval for survival
+xx=1
+polyg_surv(post_bladder_swe_fem_1y);xx=xx+1
+polyg_surv(post_bladder_swe_fem_cond);xx=xx+1
+polyg_surv(post_bladder_swe_fem_5y)
+
+# data points of estimated survival
+xx=1
+points(bladder[bladder$shou=="swe_fem_",]$surv_1y~bladder[bladder$shou=="swe_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="swe_fem_",]$surv_cond~bladder[bladder$shou=="swe_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1);xx=xx+1
+points(bladder[bladder$shou=="swe_fem_",]$surv_5y~bladder[bladder$shou=="swe_fem_",]$year
+       ,pch=17,col=colc[xx],cex=1)
+
+tckk=-0.016
+# fitted lines for survival
+xx=1
+surv_fit(post_bladder_swe_fem_1y);xx=xx+1
+surv_fit(post_bladder_swe_fem_cond);xx=xx+1
+surv_fit(post_bladder_swe_fem_5y);xx=xx+1
+
+axis(2,las=2,cex.axis=1.4,at=seq(range[1],range[2],by=10),
+     labels=c(rep("",length(seq(range[1],range[2],by=10)))),pos=1971,tck=tckk)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=20)),pos=1971,tck=tckk)
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],
+     labels = c(rep("",5)),tck=tckk)
+lines(c(1971,2020),c(range[1],range[1]))
+text(1973,range[2]-0.05*scal,"d",cex=2.2)
+
+##### slope plot --------------
+range<-range_c;scal=scal_c
+par(mar=c(2.5,1.4,0,0))
+
+plot(NULL,xlim=c(1971,2020),ylim=c(range[1],range[2]),xlab="",ylab=""
+     ,las=1, axes=FALSE)
+#rect(1971,range[2],2020,range[1],col="grey90",border=NA)
+x<-range[1]
+repeat{
+  lines(c(1971,2020),c(x,x),col="grey96",lwd=0.7)
+  x=x+0.5;if(x>100){break}}
+
+x<-1980
+repeat{
+  lines(c(x,x),c(range[1],range[2]),col="grey96",lwd=0.7)
+  x=x+10;if(x>2020){break}}
+
+xx=1
+polyg_slope(post_bladder_swe_fem_1y);xx=xx+1
+polyg_slope(post_bladder_swe_fem_cond);xx=xx+1
+polyg_slope(post_bladder_swe_fem_5y)
+
+xx=1
+slope_fit(post_bladder_swe_fem_1y);xx=xx+1
+slope_fit(post_bladder_swe_fem_cond);xx=xx+1
+slope_fit(post_bladder_swe_fem_5y)
+
+axis(2,las=2,cex.axis=1.4,at=c(seq(range[1],range[2],by=0.5)),
+     labels=c(rep("",length(seq(range[1],range[2],by=0.5)))),pos=1971,tck=tckk*2)
+axis(2,las=2,cex.axis=1.4,at=c(seq(-1,range[2],by=1)),pos=1971,tck=tckk*2)
+lines(c(1971,2020),c(0,0),col="grey50")
+
+axis(side=1,las=1,cex.axis=1.4,at=c(seq(1980,2020,by=10)),pos=range[1],labels=c(rep("",5)),tck=tckk*2)
+text(c(1971, seq(1979,2020,by=10)),c(rep(range[1]-0.1*scal,6)),c(1971, seq(1980,2020,by=10)),xpd=TRUE,cex=1.4)
+lines(c(1971,2020),c(range[1],range[1]))
+title(xlab="Year", line=1.4, cex.lab=1.4,xpd=TRUE)
+```
+
+# Reproducibility
+
+```{r}
+sessioninfo::session_info()
+```
